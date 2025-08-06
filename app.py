@@ -111,7 +111,8 @@ if preset_nodes:
 
     st.subheader("🧠 Identify Leverage Points")
     out_strength = G.out_degree(weight='weight')
-    most_influential = sorted(out_strength, key=lambda x: out_strength[x], reverse=True)[0]
+    out_strength_dict = dict(out_strength)
+    most_influential = sorted(out_strength_dict, key=lambda x: out_strength_dict[x], reverse=True)[0]
     st.markdown(f"**Most influential concept:** `{most_influential}`")
 
     options = [n for n in preset_nodes if n != most_influential]
