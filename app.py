@@ -72,10 +72,11 @@ for cat in categories:
 node_list = [n for sublist in category_to_nodes.values() for n in sublist]
 
 if len(node_list) < 2:
-    st.warning("Please enter at least two total concepts across categories.")
+    st.warning("Please enter at least ten total concepts across categories.")
     st.stop()
 
 # --- Define Relationships ---
+
 st.subheader("4. Define Concept-to-Concept Influences")
 st.markdown("""
 Tell us how strongly each concept affects another.
@@ -88,21 +89,24 @@ Tip: Positive = reinforcing, Negative = reducing
 
 edges = []
 for i, source in enumerate(node_list):
+    st.markdown(f"### Rating: {source}")
+    col1, col2, col3 = st.columns(3)
     for j, target in enumerate(node_list):
         if source != target:
-            st.markdown(f"**{source}** ➡️ **{target}**")
-            val = st.text_input("Influence strength (-1.0 to 1.0, optional):", key=f"edge_{i}_{j}")
-            try:
-                weight = float(val)
-                if -1.0 <= weight <= 1.0 and weight != 0.0:
-                    edges.append((source, target, weight))
-            except:
-                continue
+            with [col1, col2, col3][j % 3]:
+                st.markdown(f"**{source} ➡️ {target}**")
+                val = st.text_input("Weight (-1.0 to 1.0):", key=f"edge_{i}_{j}")
+                try:
+                    weight = float(val)
+                    if -1.0 <= weight <= 1.0 and weight != 0.0:
+                        edges.append((source, target, weight))
+                except:
+                    continue
 
 # --- Initial Activation ---
 st.subheader("5. Set Initial Activation Levels")
 st.markdown("""
-Here you're setting the **starting strength or importance** of each concept in your system. Think of this as your current state — how active, influential, or relevant each factor is *right now*.
+Here you're setting the **starting activation level** of each concept. This represents how present, important, or top-of-mind this factor is for you in the current mental landscape you're analyzing. For example, if you're feeling highly motivated, you might set 'Motivation' to 1.0. If 'Institutional Support' feels absent or irrelevant, you might set it lower, like 0.2.
 
 - Use values between **0.0 (low)** and **1.0 (high)**
 - You’ll see how these values evolve during the simulation
@@ -170,6 +174,7 @@ nx.draw_networkx_edge_labels(G, pos, edge_labels=labels, font_color='gray', font
 st.pyplot(fig)
 
 # --- Graph Summary ---
+
 st.subheader("9. Graph Summary: What Can You Learn From This Map?")
 st.markdown("""
 Here are a few analytical takeaways to help interpret your FCM:
@@ -177,24 +182,27 @@ Here are a few analytical takeaways to help interpret your FCM:
 - **Most Influential Concepts (Outbound)** – Concepts that influence the most others:
 """)
 
-top_out = sorted(G.out_degree, key=lambda x: G.out_degree[x], reverse=True)[:5]
-for node in top_out:
-    st.write(f"🔹 {node}: influences {G.out_degree[node]} other concept(s)")
+try:
+    top_out = sorted(G.out_degree(), key=lambda x: G.out_degree(x), reverse=True)[:5]
+    for node in top_out:
+        st.write(f"🔹 {node}: influences {G.out_degree(node)} other concept(s)")
 
-st.markdown("""
+    st.markdown("""
 - **Most Affected Concepts (Inbound)** – Concepts that are influenced by many others:
 """)
 
-top_in = sorted(G.in_degree, key=lambda x: G.in_degree[x], reverse=True)[:5]
-for node in top_in:
-    st.write(f"🔸 {node}: influenced by {G.in_degree[node]} other concept(s)")
+    top_in = sorted(G.in_degree(), key=lambda x: G.in_degree(x), reverse=True)[:5]
+    for node in top_in:
+        st.write(f"🔸 {node}: influenced by {G.in_degree(node)} other concept(s)")
 
-st.markdown("""
+    st.markdown("""
 - **Loops and Feedback** – If any concepts influence each other back and forth, you may be modeling a **feedback loop**, which is important for understanding reinforcement or delay in systems.
 - **Isolated Nodes** – Concepts without any links may need further thinking: Are they disconnected by design or missing an influence?
 
 Use these cues to reflect on what your map reveals about the dynamics in your mental landscape.
 """)
+except Exception as e:
+    st.warning("Graph summary could not be generated due to a data issue. Please double-check your concept connections.")
 
 # --- Download as Image ---
 buffer = io.BytesIO()
