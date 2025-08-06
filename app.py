@@ -105,19 +105,7 @@ for i, source in enumerate(node_list):
                     except:
                         continue
         st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown(f"### Rating: {source}")
-    col1, col2, col3 = st.columns(3)
-    for j, target in enumerate(node_list):
-        if source != target:
-            with [col1, col2, col3][j % 3]:
-                st.markdown(f"**{source} ➡️ {target}**")
-                val = st.text_input("Weight (-1.0 to 1.0):", key=f"edge_{i}_{j}")
-                try:
-                    weight = float(val)
-                    if -1.0 <= weight <= 1.0 and weight != 0.0:
-                        edges.append((source, target, weight))
-                except:
-                    continue
+
 
 # --- Initial Activation ---
 st.subheader("5. Set Initial Activation Levels")
