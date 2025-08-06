@@ -89,6 +89,22 @@ Tip: Positive = reinforcing, Negative = reducing
 
 edges = []
 for i, source in enumerate(node_list):
+    with st.container():
+        st.markdown(f"<div style='border: 2px solid #ccc; border-radius: 10px; padding: 1rem; margin-bottom: 1rem;'>", unsafe_allow_html=True)
+        st.markdown(f"### Influence Ratings for: {source}")
+        col1, col2 = st.columns(2)
+        for j, target in enumerate(node_list):
+            if source != target:
+                with [col1, col2][j % 2]:
+                    st.markdown(f"**{source} ➡️ {target}**")
+                    val = st.text_input("Weight (-1.0 to 1.0):", key=f"edge_{i}_{j}")
+                    try:
+                        weight = float(val)
+                        if -1.0 <= weight <= 1.0 and weight != 0.0:
+                            edges.append((source, target, weight))
+                    except:
+                        continue
+        st.markdown("</div>", unsafe_allow_html=True)
     st.markdown(f"### Rating: {source}")
     col1, col2, col3 = st.columns(3)
     for j, target in enumerate(node_list):
@@ -125,32 +141,40 @@ st.subheader("6. Run the Simulation")
 st.markdown("""
 Now we'll simulate how changes spread through your system.
 
-- The system will run multiple rounds ("steps") to show how each concept is affected by others over time
-- This lets you see how your system *naturally evolves*, based on your relationships and initial values
+- The system runs multiple rounds ("steps") to show how each concept is influenced by others over time
+- The more steps you run, the more chances indirect or reinforcing effects have to show up
+- Values are normalized to stay between 0 and 1 during propagation
 
-Adjust the number of steps below and watch how values change:
+Try different step counts and observe how concepts evolve.
 """)
+
 steps = st.slider("Number of simulation steps:", 1, 10, 3)
 current_values = initial_values.copy()
 
-for step in range(steps):
-    new_values = current_values.copy()
+# Define bounded linear squashing function
+def squash(x):
+    return max(0, min(1, x))
+
+damping = 0.5  # Controls how fast influence spreads
+for _ in range(steps):
+    updated_values = {}
     for node in G.nodes():
-        influence = 0
-        for pred in G.predecessors(node):
-            influence += current_values[pred] * G[pred][node]['weight']
-        new_values[node] = max(0, min(1, current_values[node] + influence))
-    current_values = new_values
+        influence = sum(current_values[pred] * G[pred][node]['weight'] for pred in G.predecessors(node))
+        updated_values[node] = squash(current_values[node] + damping * influence)
+    current_values = updated_values
 
 # --- Show Final Values ---
 st.subheader("7. What Changed? Final Concept Values After Simulation")
 st.markdown("""
-Here are the final values for each concept *after* the simulation ran.
+This table shows the final activation level of each concept **after the simulation has completed** — meaning, after the influence of related concepts has been applied over several rounds.
 
-- A higher number means that concept became more influential or activated as a result of the system interactions.
-- A lower number means it was reduced or suppressed.
+- A **higher number** (closer to 1.0) means the concept became more prominent, active, or impactful as other factors pushed it upward.
+- A **lower number** (closer to 0.0) means it became less influential, possibly because other factors suppressed it.
 
-Use this to see which parts of your system gain or lose importance over time.
+Use this to answer questions like:
+- Which concepts became stronger over time?
+- Which concepts were diminished or stayed stagnant?
+- How did indirect influences change the system compared to my initial inputs?
 """)
 st.dataframe(pd.DataFrame(current_values.items(), columns=["Concept", "Final Value"]))
 
@@ -176,33 +200,94 @@ st.pyplot(fig)
 # --- Graph Summary ---
 
 st.subheader("9. Graph Summary: What Can You Learn From This Map?")
+if len(edges) >= 5:
+    st.markdown("""
+    Here are a few analytical takeaways to help interpret your FCM:
+
+    - **Most Influential Concepts (Outbound)** – Concepts that influence the most others:
+    """)
+
+    try:
+        out_degrees = dict(G.out_degree())
+        top_out = sorted(out_degrees.items(), key=lambda x: x[1], reverse=True)[:5]
+        for node, degree in top_out:
+            st.write(f"🔹 {node}: influences {degree} other concept(s)")
+
+        st.markdown("""
+        - **Most Affected Concepts (Inbound)** – Concepts that are influenced by many others:
+        """)
+
+        in_degrees = dict(G.in_degree())
+        top_in = sorted(in_degrees.items(), key=lambda x: x[1], reverse=True)[:5]
+        for node, degree in top_in:
+            st.write(f"🔸 {node}: influenced by {degree} other concept(s)")
+
+        st.markdown("""
+        - **Loops and Feedback** – If any concepts influence each other back and forth, you may be modeling a **feedback loop**, which is important for understanding reinforcement or delay in systems.
+        - **Isolated Nodes** – Concepts without any links may need further thinking: Are they disconnected by design or missing an influence?
+
+        Use these cues to reflect on what your map reveals about the dynamics in your mental landscape.
+        """)
+
+    except Exception as e:
+        st.warning("Graph summary could not be generated due to a data issue. Please double-check your concept connections.")
+else:
+    st.info("Your map has fewer than 5 relationships. Add more connections to generate a meaningful summary.")
+
+# --- Ripple Effect Simulation ---
+
+st.subheader("11. Explore the Ripple Effect of a Change")
 st.markdown("""
-Here are a few analytical takeaways to help interpret your FCM:
-
-- **Most Influential Concepts (Outbound)** – Concepts that influence the most others:
+Use this section to explore how modifying a **single relationship** between concepts changes the outcome of your map.
+Select a source and target concept, modify the influence weight, and compare the final results.
 """)
 
-try:
-    top_out = sorted(G.out_degree(), key=lambda x: G.out_degree(x), reverse=True)[:5]
-    for node in top_out:
-        st.write(f"🔹 {node}: influences {G.out_degree(node)} other concept(s)")
+selected_source = st.selectbox("Choose the concept that influences: (source)", node_list, key="ripple_source")
+candidate_targets = [n for n in node_list if n != selected_source]
+selected_target = st.selectbox("Choose the concept that is influenced: (target)", candidate_targets, key="ripple_target")
+new_weight = st.slider("Set new influence value (-1.0 to 1.0):", -1.0, 1.0, 0.0, step=0.1, key="ripple_weight")
 
-    st.markdown("""
-- **Most Affected Concepts (Inbound)** – Concepts that are influenced by many others:
+# Copy and modify edge list
+modified_edges = [(s, t, w) if not (s == selected_source and t == selected_target) else (s, t, new_weight)
+                  for (s, t, w) in edges]
+edge_exists = any((s == selected_source and t == selected_target) for (s, t, w) in edges)
+if not edge_exists and new_weight != 0.0:
+    modified_edges.append((selected_source, selected_target, new_weight))
+
+# Build modified graph
+G_mod = nx.DiGraph()
+G_mod.add_nodes_from(node_list)
+G_mod.add_weighted_edges_from(modified_edges)
+
+# Simulate original and modified
+original_values = current_values.copy()
+mod_values = initial_values.copy()
+
+for _ in range(steps):
+    new_mod = {}
+    for node in G_mod.nodes():
+        infl = sum(mod_values[pred] * G_mod[pred][node]['weight'] for pred in G_mod.predecessors(node))
+        new_mod[node] = squash(mod_values[node] + damping * infl)
+    mod_values = new_mod
+
+# Compare
+st.markdown("""
+**Comparison of Final Concept Values (Original vs. Modified)**
+- Green = value increased due to your change
+- Red = value decreased
 """)
 
-    top_in = sorted(G.in_degree(), key=lambda x: G.in_degree(x), reverse=True)[:5]
-    for node in top_in:
-        st.write(f"🔸 {node}: influenced by {G.in_degree(node)} other concept(s)")
+comparison_df = pd.DataFrame({
+    "Concept": node_list,
+    "Original": [round(original_values[n], 3) for n in node_list],
+    "Modified": [round(mod_values[n], 3) for n in node_list]
+})
+comparison_df["Change"] = comparison_df["Modified"] - comparison_df["Original"]
 
-    st.markdown("""
-- **Loops and Feedback** – If any concepts influence each other back and forth, you may be modeling a **feedback loop**, which is important for understanding reinforcement or delay in systems.
-- **Isolated Nodes** – Concepts without any links may need further thinking: Are they disconnected by design or missing an influence?
-
-Use these cues to reflect on what your map reveals about the dynamics in your mental landscape.
-""")
-except Exception as e:
-    st.warning("Graph summary could not be generated due to a data issue. Please double-check your concept connections.")
+st.dataframe(comparison_df.style.applymap(
+    lambda x: 'background-color: #d1e7dd' if x > 0 else ('background-color: #f8d7da' if x < 0 else ''),
+    subset=["Change"]
+))
 
 # --- Download as Image ---
 buffer = io.BytesIO()
